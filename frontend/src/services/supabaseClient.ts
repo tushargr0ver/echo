@@ -1,4 +1,6 @@
-// Placeholder for future Supabase client configuration
-// This will be populated when integrating with Supabase backend
+import { createClient } from '@supabase/supabase-js';
 
-export const supabase = null; // Will be initialized with createClient()
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

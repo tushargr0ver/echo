@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthState, User } from '../types';
-import * as api from '../services/api';
+import { authService } from '../services/authService';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (updates: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,16 +24,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Check for existing session on app start
-    // This will be replaced with Supabase session check
-    setTimeout(() => {
-      setAuthState(prev => ({ ...prev, loading: false }));
-    }, 1000);
+    const checkUser = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        setAuthState({
+          isAuthenticated: !!user,
+          user,
+          loading: false,
+        });
+      } catch (error) {
+        console.error('Error checking user session:', error);
+        setAuthState({
+          isAuthenticated: false,
+          user: null,
+          loading: false,
+        });
+      }
+    };
+
+    checkUser();
+
+    // Listen to auth state changes
+    const { data: { subscription } } = authService.onAuthStateChange((user) => {
+      setAuthState({
+        isAuthenticated: !!user,
+        user,
+        loading: false,
+      });
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
       setAuthState(prev => ({ ...prev, loading: true }));
-      const user = await api.login(email, password);
+      const user = await authService.signIn(email, password);
       setAuthState({
         isAuthenticated: true,
         user,
@@ -47,7 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signup = async (name: string, email: string, password: string) => {
     try {
       setAuthState(prev => ({ ...prev, loading: true }));
-      const user = await api.signup(name, email, password);
+      const user = await authService.signUp(email, password, name);
       setAuthState({
         isAuthenticated: true,
         user,
@@ -61,7 +88,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await api.logout();
+      setAuthState(prev => ({ ...prev, loading: true }));
+      await authService.signOut();
       setAuthState({
         isAuthenticated: false,
         user: null,
@@ -69,6 +97,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
     } catch (error) {
       console.error('Logout error:', error);
+      setAuthState(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const updateProfile = async (updates: Partial<User>) => {
+    try {
+      const updatedUser = await authService.updateProfile(updates);
+      setAuthState(prev => ({
+        ...prev,
+        user: updatedUser,
+      }));
+    } catch (error) {
+      console.error('Profile update error:', error);
+      throw error;
     }
   };
 
@@ -77,6 +119,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     signup,
     logout,
+    updateProfile,
   };
 
   return (
